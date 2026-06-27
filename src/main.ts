@@ -25,10 +25,10 @@ async function run(): Promise<void> {
     false,
     false
   )
-  console.log('Finished download.')
+  console.error('Finished download.')
 
   if (!core.platform.isWindows) {
-    console.log('Setting execution permissions.')
+    console.error('Setting execution permissions.')
     exec('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
       if (error) {
         core.setFailed(error.message)
@@ -41,9 +41,9 @@ async function run(): Promise<void> {
   }
 
   const hemttPath = core.toPlatformPath(`${process.cwd()}/hemtt`)
-  console.log(`Adding "${hemttPath}" to Github system path.`)
+  console.error(`Adding "${hemttPath}" to Github system path.`)
   core.addPath(hemttPath)
-  console.log('Done.')
+  console.error('Done.')
 }
 
 run()

@@ -47608,9 +47608,9 @@ async function run() {
             ? asset.name === 'windows-x64.zip'
             : asset.name === 'linux-x64.zip';
     }, false, false);
-    console.log('Finished download.');
+    console.error('Finished download.');
     if (!isWindows) {
-        console.log('Setting execution permissions.');
+        console.error('Setting execution permissions.');
         (0,external_child_process_namespaceObject.exec)('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
             if (error) {
                 setFailed(error.message);
@@ -47622,9 +47622,9 @@ async function run() {
         });
     }
     const hemttPath = toPlatformPath(`${process.cwd()}/hemtt`);
-    console.log(`Adding "${hemttPath}" to Github system path.`);
+    console.error(`Adding "${hemttPath}" to Github system path.`);
     addPath(hemttPath);
-    console.log('Done.');
+    console.error('Done.');
 }
 run();
 
