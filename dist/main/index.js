@@ -47594,6 +47594,7 @@ function printDryRunInfo(data, output) {
 
 
 
+const isWin = process.platform === 'win32';
 async function run() {
     try {
         const tag = getInput('version');
@@ -47601,33 +47602,25 @@ async function run() {
             warning('HEMTT version is not set. Download will fail.');
         }
         info(`Start downloading hemtt ${tag}.`);
-        console.error('Start download (console.log).');
         await downloadRelease('BrettMayson', 'HEMTT', 'hemtt', release => {
             if (tag === 'latest')
                 return release.prerelease === false;
             return release.tag_name === tag;
         }, asset => {
-            return isWindows
+            return isWin
                 ? asset.name === 'windows-x64.zip'
                 : asset.name === 'linux-x64.zip';
         }, false, false);
-        console.error('Finished download.');
-        if (!isWindows) {
-            console.error('Setting execution permissions.');
-            (0,external_child_process_namespaceObject.exec)('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
-                if (error) {
-                    setFailed(error.message);
-                }
-                if (stderr) {
-                    setFailed(stderr);
-                }
-                info(stdout);
-            });
+        info('Finished download.');
+        if (!isWin) {
+            info('Setting execution permissions.');
+            const output = (0,external_child_process_namespaceObject.execSync)('chmod +x hemtt/hemtt');
+            info(output.toString('utf8'));
         }
         const hemttPath = toPlatformPath(`${process.cwd()}/hemtt`);
-        console.error(`Adding "${hemttPath}" to Github system path.`);
+        info(`Adding "${hemttPath}" to Github system path.`);
         addPath(hemttPath);
-        console.error('Done.');
+        info('Done.');
     }
     catch (error) {
         if (error instanceof Error) {

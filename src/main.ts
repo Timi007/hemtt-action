@@ -1,6 +1,8 @@
 import * as core from '@actions/core'
 import {downloadRelease} from '@terascope/fetch-github-release'
-import {exec} from 'child_process'
+import {execSync} from 'child_process'
+
+const isWin = process.platform === 'win32'
 
 async function run(): Promise<void> {
   try {
@@ -11,7 +13,6 @@ async function run(): Promise<void> {
     }
 
     core.info(`Start downloading hemtt ${tag}.`)
-    console.error('Start download (console.log).')
     await downloadRelease(
       'BrettMayson',
       'HEMTT',
@@ -21,32 +22,25 @@ async function run(): Promise<void> {
         return release.tag_name === tag
       },
       asset => {
-        return core.platform.isWindows
+        return isWin
           ? asset.name === 'windows-x64.zip'
           : asset.name === 'linux-x64.zip'
       },
       false,
       false
     )
-    console.error('Finished download.')
+    core.info('Finished download.')
 
-    if (!core.platform.isWindows) {
-      console.error('Setting execution permissions.')
-      exec('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
-        if (error) {
-          core.setFailed(error.message)
-        }
-        if (stderr) {
-          core.setFailed(stderr)
-        }
-        core.info(stdout)
-      })
+    if (!isWin) {
+      core.info('Setting execution permissions.')
+      const output = execSync('chmod +x hemtt/hemtt')
+      core.info(output.toString('utf8'))
     }
 
     const hemttPath = core.toPlatformPath(`${process.cwd()}/hemtt`)
-    console.error(`Adding "${hemttPath}" to Github system path.`)
+    core.info(`Adding "${hemttPath}" to Github system path.`)
     core.addPath(hemttPath)
-    console.error('Done.')
+    core.info('Done.')
   } catch (error) {
     if (error instanceof Error) {
       core.setFailed(error.message)
