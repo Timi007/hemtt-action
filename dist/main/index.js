@@ -47595,6 +47595,21 @@ function printDryRunInfo(data, output) {
 
 
 const isWin = process.platform === 'win32';
+process.on('uncaughtException', (err) => {
+    console.error('uncaughtException:', err && (err.stack || err.message || err));
+    try {
+        setFailed(String(err));
+    }
+    catch { }
+    // rethrow? keep process alive long enough to see logs
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('unhandledRejection:', reason);
+    try {
+        setFailed(String(reason));
+    }
+    catch { }
+});
 async function run() {
     try {
         const tag = getInput('version');
@@ -47602,15 +47617,48 @@ async function run() {
             warning('HEMTT version is not set. Download will fail.');
         }
         info(`Start downloading hemtt ${tag}.`);
-        await downloadRelease('BrettMayson', 'HEMTT', 'hemtt', release => {
-            if (tag === 'latest')
-                return release.prerelease === false;
-            return release.tag_name === tag;
-        }, asset => {
-            return isWin
-                ? asset.name === 'windows-x64.zip'
-                : asset.name === 'linux-x64.zip';
-        }, false, false);
+        console.error('About to call downloadRelease');
+        // diagnostic wrappers for the filters:
+        const releaseFilter = (release) => {
+            try {
+                console.error('releaseFilter check:', release && release.tag_name, 'prerelease=', release && release.prerelease);
+                if (tag === 'latest')
+                    return release.prerelease === false;
+                return release.tag_name === tag;
+            }
+            catch (e) {
+                console.error('releaseFilter threw:', e);
+                throw e;
+            }
+        };
+        const assetFilter = (asset) => {
+            try {
+                console.error('assetFilter check:', asset && asset.name);
+                return isWin
+                    ? asset.name === 'windows-x64.zip'
+                    : asset.name === 'linux-x64.zip';
+            }
+            catch (e) {
+                console.error('assetFilter threw:', e);
+                throw e;
+            }
+        };
+        // call downloadRelease and inspect what it returns
+        const dlReturn = downloadRelease('BrettMayson', 'HEMTT', 'hemtt', releaseFilter, assetFilter, false, false);
+        console.error('downloadRelease returned (type):', typeof dlReturn, 'isPromise:', !!(dlReturn && typeof dlReturn.then === 'function'));
+        const downloadPromise = (dlReturn && typeof dlReturn.then === 'function')
+            ? dlReturn
+            : Promise.resolve(dlReturn);
+        // timebox the download so we can detect hangs
+        const TIMEOUT_MS = 3 * 60 * 1000;
+        const result = await Promise.race([
+            downloadPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`downloadRelease timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS))
+        ]).catch(err => {
+            console.error('downloadRelease promise rejected or timed out:', err);
+            throw err;
+        });
+        console.error('downloadRelease resolved with:', result);
         info('Finished download.');
         if (!isWin) {
             info('Setting execution permissions.');
@@ -47623,8 +47671,12 @@ async function run() {
         info('Done.');
     }
     catch (error) {
+        console.error('Top-level catch:', error);
         if (error instanceof Error) {
             setFailed(error.message);
+        }
+        else {
+            setFailed(String(error));
         }
     }
 }
