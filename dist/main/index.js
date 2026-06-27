@@ -47594,37 +47594,46 @@ function printDryRunInfo(data, output) {
 
 
 
-const tag = getInput('version');
 async function run() {
-    if (!tag) {
-        warning('HEMTT version is not set. Download will fail.');
+    try {
+        const tag = getInput('version');
+        if (!tag) {
+            warning('HEMTT version is not set. Download will fail.');
+        }
+        info(`Start downloading hemtt ${tag}.`);
+        console.error('Start download (console.log).');
+        await downloadRelease('BrettMayson', 'HEMTT', 'hemtt', release => {
+            if (tag === 'latest')
+                return release.prerelease === false;
+            return release.tag_name === tag;
+        }, asset => {
+            return isWindows
+                ? asset.name === 'windows-x64.zip'
+                : asset.name === 'linux-x64.zip';
+        }, false, false);
+        console.error('Finished download.');
+        if (!isWindows) {
+            console.error('Setting execution permissions.');
+            (0,external_child_process_namespaceObject.exec)('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
+                if (error) {
+                    setFailed(error.message);
+                }
+                if (stderr) {
+                    setFailed(stderr);
+                }
+                info(stdout);
+            });
+        }
+        const hemttPath = toPlatformPath(`${process.cwd()}/hemtt`);
+        console.error(`Adding "${hemttPath}" to Github system path.`);
+        addPath(hemttPath);
+        console.error('Done.');
     }
-    await downloadRelease('BrettMayson', 'HEMTT', 'hemtt', release => {
-        if (tag === 'latest')
-            return release.prerelease === false;
-        return release.tag_name === tag;
-    }, asset => {
-        return isWindows
-            ? asset.name === 'windows-x64.zip'
-            : asset.name === 'linux-x64.zip';
-    }, false, false);
-    console.error('Finished download.');
-    if (!isWindows) {
-        console.error('Setting execution permissions.');
-        (0,external_child_process_namespaceObject.exec)('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
-            if (error) {
-                setFailed(error.message);
-            }
-            if (stderr) {
-                setFailed(stderr);
-            }
-            info(stdout);
-        });
+    catch (error) {
+        if (error instanceof Error) {
+            setFailed(error.message);
+        }
     }
-    const hemttPath = toPlatformPath(`${process.cwd()}/hemtt`);
-    console.error(`Adding "${hemttPath}" to Github system path.`);
-    addPath(hemttPath);
-    console.error('Done.');
 }
 run();
 
