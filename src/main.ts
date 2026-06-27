@@ -7,6 +7,10 @@ const isWin = process.platform === 'win32'
 const tag: string = core.getInput('version')
 
 async function run(): Promise<void> {
+  if (!tag) {
+    core.warning('HEMTT version is not set. Download will fail.')
+  }
+
   await downloadRelease(
     'BrettMayson',
     'HEMTT',
@@ -23,7 +27,10 @@ async function run(): Promise<void> {
     false,
     false
   )
+  core.debug('Finished download.')
+
   if (!isWin) {
+    core.debug('Setting execution permissions.')
     exec('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
       if (error) {
         core.setFailed(error.message)
@@ -34,7 +41,11 @@ async function run(): Promise<void> {
       core.info(stdout)
     })
   }
-  core.addPath(`${process.cwd()}/hemtt`)
+
+  const hemttPath = `${process.cwd()}/hemtt`
+  core.info(`Adding "${hemttPath}" to Github system path.`)
+  core.addPath(hemttPath)
+  core.debug('Done.')
 }
 
 run()
