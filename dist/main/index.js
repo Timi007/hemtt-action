@@ -36710,7 +36710,7 @@ function toWin32Path(pth) {
  * @return string The platform-specific path.
  */
 function toPlatformPath(pth) {
-    return pth.replace(/[/\\]/g, path.sep);
+    return pth.replace(/[/\\]/g, external_path_.sep);
 }
 //# sourceMappingURL=path-utils.js.map
 // EXTERNAL MODULE: external "string_decoder"
@@ -38108,7 +38108,7 @@ function isDebug() {
  * @param message debug message
  */
 function core_debug(message) {
-    command_issueCommand('debug', {}, message);
+    issueCommand('debug', {}, message);
 }
 /**
  * Adds an error issue
@@ -47594,7 +47594,6 @@ function printDryRunInfo(data, output) {
 
 
 
-const isWin = process.platform === 'win32';
 const tag = getInput('version');
 async function run() {
     if (!tag) {
@@ -47605,13 +47604,13 @@ async function run() {
             return release.prerelease === false;
         return release.tag_name === tag;
     }, asset => {
-        return isWin
+        return isWindows
             ? asset.name === 'windows-x64.zip'
             : asset.name === 'linux-x64.zip';
     }, false, false);
-    core_debug('Finished download.');
-    if (!isWin) {
-        core_debug('Setting execution permissions.');
+    console.log('Finished download.');
+    if (!isWindows) {
+        console.log('Setting execution permissions.');
         (0,external_child_process_namespaceObject.exec)('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
             if (error) {
                 setFailed(error.message);
@@ -47622,10 +47621,10 @@ async function run() {
             info(stdout);
         });
     }
-    const hemttPath = `${process.cwd()}/hemtt`;
-    info(`Adding "${hemttPath}" to Github system path.`);
+    const hemttPath = toPlatformPath(`${process.cwd()}/hemtt`);
+    console.log(`Adding "${hemttPath}" to Github system path.`);
     addPath(hemttPath);
-    core_debug('Done.');
+    console.log('Done.');
 }
 run();
 

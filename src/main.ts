@@ -2,8 +2,6 @@ import * as core from '@actions/core'
 import {downloadRelease} from '@terascope/fetch-github-release'
 import {exec} from 'child_process'
 
-const isWin = process.platform === 'win32'
-
 const tag: string = core.getInput('version')
 
 async function run(): Promise<void> {
@@ -20,17 +18,17 @@ async function run(): Promise<void> {
       return release.tag_name === tag
     },
     asset => {
-      return isWin
+      return core.platform.isWindows
         ? asset.name === 'windows-x64.zip'
         : asset.name === 'linux-x64.zip'
     },
     false,
     false
   )
-  core.debug('Finished download.')
+  console.log('Finished download.')
 
-  if (!isWin) {
-    core.debug('Setting execution permissions.')
+  if (!core.platform.isWindows) {
+    console.log('Setting execution permissions.')
     exec('chmod +x hemtt/hemtt', (error, stdout, stderr) => {
       if (error) {
         core.setFailed(error.message)
@@ -42,10 +40,10 @@ async function run(): Promise<void> {
     })
   }
 
-  const hemttPath = `${process.cwd()}/hemtt`
-  core.info(`Adding "${hemttPath}" to Github system path.`)
+  const hemttPath = core.toPlatformPath(`${process.cwd()}/hemtt`)
+  console.log(`Adding "${hemttPath}" to Github system path.`)
   core.addPath(hemttPath)
-  core.debug('Done.')
+  console.log('Done.')
 }
 
 run()
