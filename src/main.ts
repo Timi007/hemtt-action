@@ -1,19 +1,74 @@
 import * as core from '@actions/core'
-import {downloadRelease} from '@terascope/fetch-github-release'
+import * as tc from '@actions/tool-cache'
+import {Octokit} from '@octokit/rest'
+import type {Endpoints} from '@octokit/types'
 import {execSync} from 'child_process'
+import * as fs from 'fs'
+import * as path from 'path'
+
+// Strongly-typed release / asset types via Endpoints
+type ReleasesListResponse =
+  Endpoints['GET /repos/{owner}/{repo}/releases']['response']
+type Release = ReleasesListResponse['data'][number]
+type Asset = Release['assets'][number]
 
 const isWin = process.platform === 'win32'
 
-process.on('uncaughtException', (err) => {
-  console.error('uncaughtException:', err && (err.stack || err.message || err))
-  try { core.setFailed(String(err)) } catch {}
-  // rethrow? keep process alive long enough to see logs
-})
+async function downloadAndExtractRelease(
+  owner: string,
+  repo: string,
+  tag: string,
+  assetName: string,
+  destDir: string,
+  authToken = ''
+): Promise<string> {
+  const octokit = new Octokit({auth: authToken})
+  core.info(`Listing releases for ${owner}/${repo}`)
+  const releasesResp = await octokit.rest.repos.listReleases({
+    owner,
+    repo,
+    per_page: 100
+  })
+  const releases: Release[] = releasesResp.data as Release[]
 
-process.on('unhandledRejection', (reason) => {
-  console.error('unhandledRejection:', reason)
-  try { core.setFailed(String(reason)) } catch {}
-})
+  const release =
+    tag === 'latest'
+      ? releases.find(r => !r.prerelease && !r.draft)
+      : releases.find(r => r.tag_name === tag)
+
+  if (!release) {
+    throw new Error(`Release '${tag}' not found for ${owner}/${repo}`)
+  }
+  core.debug(`Using release: ${release.tag_name}`)
+
+  const assets = release.assets ?? []
+  const asset: Asset | undefined = assets.find(a => a.name === assetName)
+  if (!asset || !asset.browser_download_url) {
+    throw new Error(
+      `Asset '${assetName}' not found in release ${release.tag_name}`
+    )
+  }
+  core.debug(
+    `Found asset: ${asset.name}, downloading from ${asset.browser_download_url}`
+  )
+
+  // Download to a temp file
+  const downloadedPath = await tc.downloadTool(asset.browser_download_url)
+  core.debug(`Downloaded asset to ${downloadedPath}`)
+
+  // ensure destination dir exists
+  const absoluteDest = path.resolve(destDir)
+  if (!fs.existsSync(absoluteDest)) {
+    fs.mkdirSync(absoluteDest, {recursive: true})
+  }
+
+  // extract zip into destDir
+  // tool-cache.extractZip creates destination folder if it doesn't exist
+  await tc.extractZip(downloadedPath, absoluteDest)
+  core.debug(`Extracted asset into ${absoluteDest}`)
+
+  return absoluteDest
+}
 
 async function run(): Promise<void> {
   try {
@@ -24,74 +79,37 @@ async function run(): Promise<void> {
     }
 
     core.info(`Start downloading hemtt ${tag}.`)
-    console.error('About to call downloadRelease')
 
-    // diagnostic wrappers for the filters:
-    const releaseFilter = (release: any) => {
-      try {
-        console.error('releaseFilter check:', release && release.tag_name, 'prerelease=', release && release.prerelease)
-        if (tag === 'latest') return release.prerelease === false
-        return release.tag_name === tag
-      } catch (e) {
-        console.error('releaseFilter threw:', e)
-        throw e
-      }
-    }
+    // Pick asset by platform
+    const assetName = isWin ? 'windows-x64.zip' : 'linux-x64.zip'
 
-    const assetFilter = (asset: any) => {
-      try {
-        console.error('assetFilter check:', asset && asset.name)
-        return isWin
-          ? asset.name === 'windows-x64.zip'
-          : asset.name === 'linux-x64.zip'
-      } catch (e) {
-        console.error('assetFilter threw:', e)
-        throw e
-      }
-    }
-
-    // call downloadRelease and inspect what it returns
-    const dlReturn = downloadRelease(
+    // Download & extract GitHub release asset
+    const hemttDir = await downloadAndExtractRelease(
       'BrettMayson',
       'HEMTT',
+      tag,
+      assetName,
       'hemtt',
-      releaseFilter,
-      assetFilter,
-      false,
-      false
+      process.env.GITHUB_TOKEN
     )
-
-    console.error('downloadRelease returned (type):', typeof dlReturn, 'isPromise:', !!(dlReturn && typeof (dlReturn as any).then === 'function'))
-
-    const downloadPromise = (dlReturn && typeof (dlReturn as any).then === 'function')
-      ? dlReturn as Promise<any>
-      : Promise.resolve(dlReturn)
-
-    // timebox the download so we can detect hangs
-    const TIMEOUT_MS = 3 * 60 * 1000
-    const result = await Promise.race([
-      downloadPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`downloadRelease timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS))
-    ]).catch(err => {
-      console.error('downloadRelease promise rejected or timed out:', err)
-      throw err
-    })
-
-    console.error('downloadRelease resolved with:', result)
-    core.info('Finished download.')
+    core.info(`Finished download and extraction to: ${hemttDir}`)
 
     if (!isWin) {
       core.info('Setting execution permissions.')
-      const output = execSync('chmod +x hemtt/hemtt')
-      core.info(output.toString('utf8'))
+      // Adjust path to the binary as needed (here we assume hemtt/hemtt inside the zip)
+      const binPath = path.join(hemttDir, 'hemtt')
+      if (fs.existsSync(binPath)) {
+        execSync(`chmod +x ${binPath}`)
+      } else {
+        core.warning(`Expected binary not found at ${binPath}; skipping chmod.`)
+      }
     }
 
-    const hemttPath = core.toPlatformPath(`${process.cwd()}/hemtt`)
-    core.info(`Adding "${hemttPath}" to Github system path.`)
+    const hemttPath = core.toPlatformPath(hemttDir)
+    core.info(`Adding ${hemttPath} to Github system path.`)
     core.addPath(hemttPath)
     core.info('Done.')
   } catch (error) {
-    console.error('Top-level catch:', error)
     if (error instanceof Error) {
       core.setFailed(error.message)
     } else {

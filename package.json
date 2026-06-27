@@ -26,10 +26,12 @@
     "license": "MIT",
     "dependencies": {
         "@actions/core": "^3.0.1",
-        "@terascope/fetch-github-release": "^2.3.1"
+        "@actions/tool-cache": "^4.0.0",
+        "@octokit/rest": "^22.0.1"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.4",
+        "@octokit/types": "^16.0.0",
         "@types/node": "^26.0.1",
         "@vercel/ncc": "^0.44.0",
         "eslint": "^9.39.4",
